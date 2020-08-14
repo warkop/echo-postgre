@@ -1,9 +1,8 @@
 package main
 
 import (
-
-	//"fmt"
 	"net/http"
+	"time"
 
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
@@ -11,31 +10,27 @@ import (
 	"github.com/spf13/viper"
 )
 
-//func UsersModel() *pg.DB {
-//	db := pg.Connect(&pg.Options{
-//		Database: viper.GetString("DB_NAME"),
-//		User: viper.GetString("DB_USER"),
-//		Password: viper.GetString("DB_PASS"),
-//	})
-//
-//	defer db.Close()
-//	return db
-//}
-
 //Users is pattern from table users
 type Users struct {
-	gorm.Model
-	id       int `gorm:"primary_key"`
-	roleID   int
-	name     string
-	username string
-	password string
+	ID        int       `gorm:"column:id"`
+	Name      string    `gorm:"column:name"`
+	Email     string    //column name is `email`
+	CreatedAt time.Time `gorm:"column:created_at"`
+}
+
+func connect() *gorm.DB {
+	db, _ := gorm.Open("postgres", "host="+viper.GetString("DB_HOST")+" port="+viper.GetString("DB_PORT")+" user="+viper.GetString("DB_USER")+" dbname="+viper.GetString("DB_NAME")+" password="+viper.GetString("DB_PASS")+" sslmode=disable")
+
+	return db
+}
+
+func closed(db *gorm.DB) {
+	defer db.Close()
 }
 
 func main() {
-	//db := UsersModel()
 	e := echo.New()
-	var users Users
+	var users []Users
 
 	viper.SetConfigType("env")
 	viper.AddConfigPath(".")
@@ -48,14 +43,18 @@ func main() {
 	}
 
 	e.GET("/", func(context echo.Context) error {
-		db, err := gorm.Open("postgres", "host="+viper.GetString("DB_HOST")+" port="+viper.GetString("DB_PORT")+" user="+viper.GetString("DB_USER")+" dbname="+viper.GetString("DB_NAME")+" password="+viper.GetString("DB_PASS")+" sslmode=disable")
-		defer db.Close()
+		db := connect()
+		db.Table("users").Find(&users)
+		closed(db)
+		return context.JSON(http.StatusOK, users)
+	})
 
-		if err != nil {
-			panic(err.Error())
-		}
-
-		return context.JSON(http.StatusOK, db.First(&users))
+	e.GET("/:id", func(context echo.Context) error {
+		id := context.Param("id")
+		db := connect()
+		db.Table("users").First(&users, id)
+		closed(db)
+		return context.JSON(http.StatusOK, users)
 	})
 
 	e.Logger.Fatal(e.Start(":" + viper.GetString("SERVER_PORT")))
